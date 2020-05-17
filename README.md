@@ -1,6 +1,6 @@
 # ScreenRecord
  
-点击此按钮就会把十秒内（可在代码进行修改）的Unity屏幕缓存输出成gif  
+点击此按钮就会把十秒内（可在代码进行修改）的Unity屏幕帧缓冲输出成gif  
 ![Image text](https://github.com/sunbrando/ScreenRecord/blob/master/Document/20200517221438.png)  
 如下图的gif即由此插件生成的  
 ![inspector](https://github.com/sunbrando/ScreenRecord/blob/master/Assets/Gif/%E6%A1%88%E5%8F%91%E7%8E%B0%E5%9C%BA05-17%2018-19-19.gif)
