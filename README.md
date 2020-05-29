@@ -7,23 +7,25 @@
 
 用途：
 ---
-当测试遇到bug的时候，一般都是发屏幕截图或者发报错堆栈给技术，  
+1.可以做Unity的GIF屏幕录制工具  
+
+2.当测试遇到bug的时候，一般都是发屏幕截图或者发报错堆栈给技术，  
 但有些bug并不能简单的通过截图和堆栈就能明了，需要让测试重新把游戏跑一遍，然后你就傻傻的站在那看着他跑一遍，更严重的要重新创号跑一遍，  
 更糟糕的是他说，我也不知道我刚刚怎么操作，就出这个bug了~  
 这个时候，这个插件就派上用场了，开启时光倒流，案件瞬间重现，免去以前繁琐的操作，  
-以后发现BUG不用再发图片，直接发GIF即可，测试看到这插件一定会感哭涕零。
-
-注意事项：
----
-1.此插件只能用于编辑器和PC包</br>
-2.需要将Api改为.NET 2.0，不能使用Subset，不然PC包无法使用System.Drawing</br>
-![Image text](https://github.com/sunbrando/ScreenRecord/blob/master/Document/QQ%E5%9B%BE%E7%89%8720200517211712.png)  
+以后发现BUG不用再发图片，直接发GIF即可，测试看到这插件一定会感哭涕零~~~
 
 已知BUG：
 ---
-不能将UGUI的画面写入到gif，因为UGUI并不是通过Camera进行绘制，不过本人的项目用的是fairyGUI是通过Camerah绘制，暂时不知道怎么获取到UGUI的帧缓冲，有知道的同学希望能告知下。  
-在自己宿舍的Unity2019.x打出的PC包发现System.Drawing会报错，即使将Api改为.NET 4.x~~~~  
+这里我是通过Camera.onPostRender获取的屏幕截图，fairyGUI/NGUI这些UI系统通过Camerah绘制的可以成功采样进去，而UGUI并不是通过Camera绘制，所以无法采样得到，暂时也还不知道怎么解决，有知道的同学希望能告知下。  
+
+参考：
+---
+https://github.com/Chman/Moments  
+之前一版是通过调用第三方GIF DLL形式实现的，后面朋友发现原来万能的GitHub已经有人做过类似（上面链接）的了，所以我也参考外国大佬的优化了自己的，并去掉了DLL直接使用源码的方式。  
+我这个和外国大佬的最大的区别就是，他的代码比我好看...还有就是他获取帧缓冲的方式是OnRenderImage，而我用的是Camera.onPostRender，我测试了下OnRenderImage是无法采样到fairyGUI/NGUI这些UI系统的，不过同样无法采样到UGUI。
 
 测试平台：
 ---
-Unity2017.x、Window
+Unity2017.x/Unity2019.x  
+支持编辑器和PC包的
