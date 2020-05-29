@@ -1,14 +1,29 @@
-﻿#if UNITY_EDITOR || UNITY_STANDALONE_WIN
+﻿/*
+ * Copyright <2020> <sunbrando>
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
 
-using Gif.Components;
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.IO;
 using UnityEngine;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using Moments.Encoder;
+using System.IO;
+using ThreadPriority = System.Threading.ThreadPriority;
 
 public class ScreenRecord : MonoBehaviour {
-    //只允许单例
+
+    //线程状态
+    public enum RecorderState
+    {
+        Prepare,
+        Finish
+    }
+
+    #region 只允许单例
+
     private static ScreenRecord instance = null;
     public static void CreateInstance()
     {
@@ -26,21 +41,43 @@ public class ScreenRecord : MonoBehaviour {
         return instance;
     }
 
+#endregion
+
+    #region 所有的字段
+
+    //准备开始转为gif
+    public Action OnPreProcessingDone;
+    //准备开始保存gif
+    public Action<int, float> OnFileSaveProgress;
+    //保存gif完毕
+    public Action<int, string> OnFileSaved;
+
+
     //屏幕缓冲队列
     Queue<Texture2D> bufferQueue = new Queue<Texture2D>();
-
     //会持续记录的时间，单位：秒（根据需要调整，注意：设置太大容易内存爆炸）
     int durationTime = 10;
     //多少秒拍照记录一次（即一秒3张，根据需要调整，注意：设置太小容易内存爆炸）
     float shotTime = 0.3f;
     //下一次拍照的时间
     float nextTime;
+    //-1表示不循环，0表示循环，大于0表示循环的时间
+    int repeat = 0;
+    //品质1~100， 1 最好
+    int quality = 15;
+    //线程状态
+    RecorderState State { get; set; }
 
+    #endregion
+
+    #region 生成gif逻辑部分
     void Start()
     {
-        Camera.onPostRender += RenderBuffer;
         nextTime = 0.0f;
+        State = RecorderState.Finish;
+        Camera.onPostRender += RenderBuffer;
     }
+
     void OnDestroy()
     {
         Camera.onPostRender -= RenderBuffer;
@@ -50,11 +87,17 @@ public class ScreenRecord : MonoBehaviour {
     {
         //这里会获取最后才渲染的那个相机的帧缓冲，
         //注意：这里填写的要是最后才进行渲染的那个摄像机的名字，
-        //一般是UI摄像机最后，例如使用的是fairyGUI则填：Stage Camera（UGUI暂时不知道怎么处理）
+        //一般是UI摄像机最后，例如使用的是fairyGUI则填：Stage Camera（但UGUI没有Camera，暂时没有找到处理办法）
         if (camera.name != "Main Camera")
         {
             return;
         }
+
+        if (State != RecorderState.Finish)
+        {
+            return;
+        }
+
         if (Time.fixedTime - nextTime < shotTime)
         {
             return;
@@ -65,16 +108,17 @@ public class ScreenRecord : MonoBehaviour {
         Enqueue(tex, bufferQueue);
     }
 
-    public string Capture(string path)
+    public void Capture(string path)
     {
+        if (State != RecorderState.Finish)
+        {
+            Debug.LogWarning("当前正在生成GIF，请稍等...");
+            return;
+        }
+        State = RecorderState.Prepare;
         string name = "案发现场" + System.DateTime.Now.ToString("MM-dd HH-mm-ss") + ".gif";
         path = Path.Combine(path, name);
-        ToGif(bufferQueue, path, (int)(shotTime * 1000));
-
-        bufferQueue.Clear();
-        GC.Collect();
-
-        return path;
+        PreProcess(path);
     }
 
     void Enqueue(Texture2D text, Queue<Texture2D> queue)
@@ -82,7 +126,7 @@ public class ScreenRecord : MonoBehaviour {
         if (queue.Count > (durationTime / shotTime))
         {
             Texture2D screenShot = queue.Dequeue();
-            GameObject.DestroyImmediate(screenShot);
+            DestroyImmediate(screenShot);
         }
 
         queue.Enqueue(text);
@@ -92,67 +136,69 @@ public class ScreenRecord : MonoBehaviour {
     Texture2D TakeShot(Camera camera, int width, int height)
     {
         Texture2D screenShot = new Texture2D(width, height, TextureFormat.RGB24, false);
-        //因为从GPU里读取屏幕像素，这里执行的时候，CPU无可避免的会出现峰值，但不会造成明显卡顿
+        //因为从GPU里读取屏幕像素，这里执行的时候，CPU无可避免的会出现峰值，可能会有点卡顿
         screenShot.ReadPixels(new Rect(0, 0, width, height), 0, 0);
         screenShot.Apply(false);
 
         return screenShot;
     }
 
-    /// <summary>
-    /// 生成为gif文件
-    /// </summary>
-    /// <param name="giffile">gif保存路径</param>
-    /// <param name="time">每帧的时间/ms</param>
-    void ToGif(Queue<Texture2D> queue, string giffile, int time)
+    void PreProcess(string filepath)
     {
-        AnimatedGifEncoder e = new AnimatedGifEncoder();
-        e.Start(giffile);
+        List<GifFrame> frames = new List<GifFrame>(bufferQueue.Count);
 
-        //每帧播放时间
-        e.SetDelay(time);
-
-        //-1：不重复，0：重复
-        e.SetRepeat(0);
-
-        //图像转换的质量，1~20：1最好，20最差，但生成速度快
-        e.SetQuality(20);
-
-        for (int i = 0, count = queue.Count; i < count; i++)
+        while (bufferQueue.Count > 0)
         {
-            System.Drawing.Image img = GetImg(queue);
-            if (img == null)
-            {
-                break;
-            }
-            e.AddFrame(img);
-        }
-        e.Finish();
-    }
+            Texture2D screenShot = bufferQueue.Dequeue();
 
-    System.Drawing.Image GetImg(Queue<Texture2D> queue)
-    {
-        Texture2D screenShot = queue.Dequeue();
-        if (screenShot == null)
-        {
-            return null;
+            GifFrame frame = new GifFrame() 
+            { 
+                Width = screenShot.width, 
+                Height = screenShot.height, 
+                Data = screenShot.GetPixels32() 
+            };
+
+            frames.Add(frame);
+            Flush(screenShot);
         }
 
-        //0~100：0最差，100最好
-        byte[] bytes = screenShot.EncodeToJPG(50);
-        MemoryStream ms = new MemoryStream(bytes);
-        GameObject.DestroyImmediate(screenShot);
-        System.Drawing.Image img = System.Drawing.Image.FromStream(ms);
-        //转成缩略图再输出
-        System.Drawing.Image.GetThumbnailImageAbort myCallback = new Image.GetThumbnailImageAbort(ThumbnailCallback);
-        System.Drawing.Image imgThumbnail = img.GetThumbnailImage(img.Width / 2, img.Height / 2, myCallback, IntPtr.Zero);
-        return imgThumbnail;
+        bufferQueue.Clear();
+
+        // Callback
+        if (OnPreProcessingDone != null)
+            OnPreProcessingDone();
+
+        GifEncoder encoder = new GifEncoder(repeat, quality);
+        encoder.SetDelay(Mathf.RoundToInt(shotTime * 1000f));
+        Moments.Worker worker = new Moments.Worker()
+        {
+            m_Encoder = encoder,
+            m_Frames = frames,
+            m_FilePath = filepath,
+            m_OnFileSaved = OnFileSaved,
+            m_OnFileSaveProgress = OnFileSaveProgress,
+            m_OnFinish = new Action(Finish)
+        };
+        worker.Start();
     }
 
-    public bool ThumbnailCallback()
+    void Flush(UnityEngine.Object obj)
     {
-        return false;
-    }
-}
-
+#if UNITY_EDITOR
+        if (Application.isPlaying)
+            Destroy(obj);
+        else
+            DestroyImmediate(obj);
+#else
+            UnityEngine.Object.Destroy(obj);
 #endif
+    }
+
+    void Finish()
+    {
+        State = RecorderState.Finish;
+    }
+
+    #endregion
+
+}
