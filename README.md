@@ -17,13 +17,13 @@
 
 已知BUG：
 ---
-这里我是通过Camera.onPostRender获取的屏幕截图，fairyGUI/NGUI这些UI系统通过Camerah绘制的可以成功采样进去，而UGUI并不是通过Camera绘制，所以无法采样得到，暂时也还不知道怎么解决，有知道的同学希望能告知下。  
+这里我是通过Camera.onPostRender获取的屏幕截图，fairyGUI/NGUI这些UI系统通过Camera绘制的可以成功采样进去，而UGUI并不是通过Camera绘制，所以无法采样得到，暂时还不知道怎么解决，有知道的同学希望能告知下。  
 
 参考：
 ---
 https://github.com/Chman/Moments  
 之前一版是通过调用第三方GIF DLL形式实现的，后面朋友发现原来万能的GitHub已经有人做过类似（上面链接）的了，所以我也参考外国大佬的优化了自己的，并去掉了DLL直接使用源码的方式。  
-我这个和外国大佬的最大的区别就是，他的代码比我好看...还有就是他获取帧缓冲的方式是OnRenderImage，而我用的是Camera.onPostRender，我测试了下OnRenderImage是无法采样到fairyGUI/NGUI这些UI系统的，不过同样无法采样到UGUI。
+我这个和外国大佬的最大的区别就是，他的代码比我好看...还有就是他获取帧缓冲的方式是OnRenderImage，而我用的是Camera.onPostRender，我测试了下OnRenderImage是无法采样到fairyGUI/NGUI这些UI系统的，当然也无法采样到UGUI。
 
 测试平台：
 ---
