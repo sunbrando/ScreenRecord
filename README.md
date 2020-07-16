@@ -17,7 +17,7 @@
 
 已知BUG：
 ---
-这里我是通过Camera.onPostRender获取的屏幕截图，fairyGUI/NGUI这些UI系统通过Camera绘制的可以成功采样进去，而UGUI并不是通过Camera绘制，所以无法采样得到，暂时还不知道怎么解决，有知道的同学希望能告知下。  
+这里我是通过Camera.onPostRender获取的屏幕截图，fairyGUI/NGUI这些UI系统通过Camera绘制的可以成功采样进去，而UGUI则暂不支持。 
 
 参考：
 ---
